@@ -437,17 +437,17 @@ def main(event=None, context=None):
     monthly_totals       = fetch_monthly_costs(client, compare_date)
     past_monthly_totals  = fetch_past_monthly_totals(client, compare_date, num_months=3)
 
-    # Inject correct March total from the working MTD fetch into the MTD bucket
-    from datetime import date as date_type
-    today      = datetime.now(timezone.utc).date()
-    march_key  = today.replace(day=1)
+    # Use the working MTD data for the March row
+    today       = datetime.now(timezone.utc).date()
+    march_label = today.replace(day=1).strftime("%b %Y") + " (MTD)"
     march_total = sum(monthly_totals.values())
     march_avg   = sum(v for d, v in monthly_totals.items() if not d.endswith("-01"))
     march_days  = sum(1 for d in monthly_totals if not d.endswith("-01"))
-    if march_key in past_monthly_totals:
-        past_monthly_totals[march_key]["total"]     = march_total
-        past_monthly_totals[march_key]["avg_total"] = march_avg
-        past_monthly_totals[march_key]["days"]      = march_days
+    past_monthly_totals[march_label] = {
+        "total":     march_total,
+        "avg_total": march_avg,
+        "days":      march_days,
+    }
 
     print_report(rows, base_date, compare_date)
     html = render_html_report(rows, base_date, compare_date, weekly_totals, monthly_totals, past_monthly_totals)
