@@ -60,17 +60,11 @@ def fetch_monthly_costs(client, compare_date):
         daily_totals[date] = total
     return daily_totals
 
-EXCLUDED_SERVICES = {
-    "Drata Security & Compliance Automation Platform",
-    "Tax",
-    "Support (Enterprise)",
-}
-
 def fetch_past_monthly_totals(client, compare_date, num_months=3):
     today       = datetime.fromisoformat(compare_date).date()
-    end_date    = str(today + timedelta(days=1))          # include current month (partial)
+    end_date    = str(today + timedelta(days=1))
     month_start = today.replace(day=1)
-    # Go back num_months before the current month so we get 3 full months + current MTD
+    # Go back num_months so we get 3 full past months + current MTD (4 total)
     start_date  = month_start
     for _ in range(num_months):
         month      = start_date.month - 1 or 12
@@ -82,22 +76,16 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
         Metrics=["UnblendedCost"],
         GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
     )
-    # Aggregate daily results into months, excluding Drata, Tax, and Support
-    # which are billed as lump sums and skew daily averages.
     month_buckets = {}
     for result in response["ResultsByTime"]:
-        day_dt = datetime.fromisoformat(result["TimePeriod"]["Start"]).date()
-        day_total = sum(
-            float(g["Metrics"]["UnblendedCost"]["Amount"])
-            for g in result["Groups"]
-            if g["Keys"][0] not in EXCLUDED_SERVICES
-        )
+        day_dt    = datetime.fromisoformat(result["TimePeriod"]["Start"]).date()
+        day_total = sum(float(g["Metrics"]["UnblendedCost"]["Amount"]) for g in result["Groups"])
         key = day_dt.replace(day=1)
         if key not in month_buckets:
             month_buckets[key] = {"total": 0.0, "avg_total": 0.0, "days": 0}
-        month_buckets[key]["total"] += day_total        # always include
+        month_buckets[key]["total"] += day_total          # all days included in total
         if day_dt.day == 1:
-            continue  # exclude 1st from avg calculation
+            continue                                       # skip day 1 from avg only
         month_buckets[key]["avg_total"] += day_total
         month_buckets[key]["days"]      += 1
 
@@ -108,6 +96,7 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
             month_label += " (MTD)"
         monthly_totals[month_label] = data
     return monthly_totals
+
 
 def compare_costs(base, compare):
     all_services = set(base) | set(compare)
