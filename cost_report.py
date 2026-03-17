@@ -77,16 +77,24 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
         Metrics=["UnblendedCost"],
         GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
     )
+    # Pre-initialize all expected month buckets so they always appear
     month_buckets = {}
+    cur = start_date
+    while cur <= today:
+        month_buckets[cur] = {"total": 0.0, "avg_total": 0.0, "days": 0}
+        m = cur.month + 1 if cur.month < 12 else 1
+        y = cur.year + 1 if cur.month == 12 else cur.year
+        cur = cur.replace(year=y, month=m, day=1)
+
     for result in response["ResultsByTime"]:
         day_dt    = datetime.fromisoformat(result["TimePeriod"]["Start"]).date()
         day_total = sum(float(g["Metrics"]["UnblendedCost"]["Amount"]) for g in result["Groups"])
         key = day_dt.replace(day=1)
         if key not in month_buckets:
             month_buckets[key] = {"total": 0.0, "avg_total": 0.0, "days": 0}
-        month_buckets[key]["total"] += day_total          # all days included in total
+        month_buckets[key]["total"] += day_total
         if day_dt.day == 1:
-            continue                                       # skip day 1 from avg only
+            continue
         month_buckets[key]["avg_total"] += day_total
         month_buckets[key]["days"]      += 1
 
