@@ -57,3 +57,5 @@ The following services are excluded from monthly totals and daily averages as th
   "Resource": "*"
 }
 ```
+## Preview
+![AWS Cost Report](sample.png)
