@@ -62,55 +62,53 @@ def fetch_monthly_costs(client, compare_date):
 
 def fetch_past_monthly_totals(client, compare_date, num_months=3):
     today       = datetime.now(timezone.utc).date()
-    end_date    = str(today + timedelta(days=1))          # use today to get all available data
     month_start = today.replace(day=1)
-    # Go back num_months so we get 3 full past months + current MTD (4 total)
-    start_date  = month_start
-    for _ in range(num_months):
-        month      = start_date.month - 1 or 12
-        year       = start_date.year - (1 if start_date.month == 1 else 0)
-        start_date = start_date.replace(year=year, month=month, day=1)
-    print(f"[monthly] today={today} month_start={month_start} start_date={start_date} end_date={end_date}")
-    response = client.get_cost_and_usage(
-        TimePeriod={"Start": str(start_date), "End": end_date},
-        Granularity="DAILY",
-        Metrics=["UnblendedCost"],
-        GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
-    )
-    # Pre-initialize all expected month buckets so they always appear
-    month_buckets = {}
-    cur = start_date
-    while cur <= today:
-        month_buckets[cur] = {"total": 0.0, "avg_total": 0.0, "days": 0}
-        m = cur.month + 1 if cur.month < 12 else 1
-        y = cur.year + 1 if cur.month == 12 else cur.year
-        cur = cur.replace(year=y, month=m, day=1)
 
-    for result in response["ResultsByTime"]:
-        day_dt    = datetime.fromisoformat(result["TimePeriod"]["Start"]).date()
-        day_total = sum(float(g["Metrics"]["UnblendedCost"]["Amount"]) for g in result["Groups"])
-        if day_dt.month == 2:
-            print(f"[feb] {day_dt} = ${day_total:.2f}")
-        key = day_dt.replace(day=1)
-        if key not in month_buckets:
-            month_buckets[key] = {"total": 0.0, "avg_total": 0.0, "days": 0}
-        month_buckets[key]["total"] += day_total
-        if day_dt.day == 1:
-            continue
-        month_buckets[key]["avg_total"] += day_total
-        month_buckets[key]["days"]      += 1
+    # Build list of months to fetch: 3 past full months + current MTD
+    months = []
+    cur = month_start
+    for _ in range(num_months + 1):
+        months.append(cur)
+        m    = cur.month - 1 or 12
+        y    = cur.year - (1 if cur.month == 1 else 0)
+        cur  = cur.replace(year=y, month=m, day=1)
+    months = sorted(months)
 
-    print(f"[monthly] months found: {[k.strftime('%b %Y') for k in sorted(month_buckets.keys())]}")
-    from datetime import date as date_type
-    feb_key = date_type(2026, 2, 1)
-    if feb_key in month_buckets:
-        print(f"[feb] TOTAL={month_buckets[feb_key]['total']:.2f} days={month_buckets[feb_key]['days']}")
     monthly_totals = {}
-    for month_key, data in sorted(month_buckets.items()):
-        month_label = month_key.strftime("%b %Y")
-        if month_key == month_start:
-            month_label += " (MTD)"
-        monthly_totals[month_label] = data
+    for m_start in months:
+        # end of month or today+1 for current month
+        if m_start == month_start:
+            m_end = str(today + timedelta(days=1))
+            label = m_start.strftime("%b %Y") + " (MTD)"
+        else:
+            import calendar
+            last_day = calendar.monthrange(m_start.year, m_start.month)[1]
+            m_end    = str(m_start.replace(day=last_day) + timedelta(days=1))
+            label    = m_start.strftime("%b %Y")
+
+        response = client.get_cost_and_usage(
+            TimePeriod={"Start": str(m_start), "End": m_end},
+            Granularity="DAILY",
+            Metrics=["UnblendedCost"],
+            GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+        )
+        total     = 0.0
+        avg_total = 0.0
+        days      = 0
+        api_days  = 0
+        for result in response["ResultsByTime"]:
+            day_dt    = datetime.fromisoformat(result["TimePeriod"]["Start"]).date()
+            day_total = sum(float(g["Metrics"]["UnblendedCost"]["Amount"]) for g in result["Groups"])
+            api_days += 1
+            total    += day_total
+            if day_dt.day == 1:
+                continue
+            avg_total += day_total
+            days      += 1
+
+        print(f"[monthly] {label}: total=${total:.2f} api_days={api_days} avg_days={days} start={m_start} end={m_end}")
+        monthly_totals[label] = {"total": total, "avg_total": avg_total, "days": days}
+
     return monthly_totals
 
 
@@ -443,17 +441,13 @@ def main(event=None, context=None):
     monthly_totals       = fetch_monthly_costs(client, compare_date)
     past_monthly_totals  = fetch_past_monthly_totals(client, compare_date, num_months=3)
 
-    # Use the working MTD data for the March row
+    # Override current month (MTD) with the proven accurate MTD fetch
     today       = datetime.now(timezone.utc).date()
     march_label = today.replace(day=1).strftime("%b %Y") + " (MTD)"
     march_total = sum(monthly_totals.values())
     march_avg   = sum(v for d, v in monthly_totals.items() if not d.endswith("-01"))
     march_days  = sum(1 for d in monthly_totals if not d.endswith("-01"))
-    past_monthly_totals[march_label] = {
-        "total":     march_total,
-        "avg_total": march_avg,
-        "days":      march_days,
-    }
+    past_monthly_totals[march_label] = {"total": march_total, "avg_total": march_avg, "days": march_days}
 
     print_report(rows, base_date, compare_date)
     html = render_html_report(rows, base_date, compare_date, weekly_totals, monthly_totals, past_monthly_totals)
