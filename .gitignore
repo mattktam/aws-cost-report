@@ -13,4 +13,4 @@ lambda_package/
 cost_report_lambda.zip
 
 # Generated HTML reports
-*.html
+
