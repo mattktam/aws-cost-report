@@ -61,7 +61,7 @@ def fetch_monthly_costs(client, compare_date):
     return daily_totals
 
 def fetch_past_monthly_totals(client, compare_date, num_months=3):
-    today       = datetime.fromisoformat(compare_date).date()
+    today       = datetime.now(timezone.utc).date()      # use real today, not compare_date
     end_date    = str(today + timedelta(days=1))
     month_start = today.replace(day=1)
     # Go back num_months so we get 3 full past months + current MTD (4 total)
