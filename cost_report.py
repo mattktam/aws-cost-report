@@ -89,6 +89,8 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
     for result in response["ResultsByTime"]:
         day_dt    = datetime.fromisoformat(result["TimePeriod"]["Start"]).date()
         day_total = sum(float(g["Metrics"]["UnblendedCost"]["Amount"]) for g in result["Groups"])
+        if day_dt.month == 2:
+            print(f"[feb] {day_dt} = ${day_total:.2f}")
         key = day_dt.replace(day=1)
         if key not in month_buckets:
             month_buckets[key] = {"total": 0.0, "avg_total": 0.0, "days": 0}
@@ -99,6 +101,10 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
         month_buckets[key]["days"]      += 1
 
     print(f"[monthly] months found: {[k.strftime('%b %Y') for k in sorted(month_buckets.keys())]}")
+    from datetime import date as date_type
+    feb_key = date_type(2026, 2, 1)
+    if feb_key in month_buckets:
+        print(f"[feb] TOTAL={month_buckets[feb_key]['total']:.2f} days={month_buckets[feb_key]['days']}")
     monthly_totals = {}
     for month_key, data in sorted(month_buckets.items()):
         month_label = month_key.strftime("%b %Y")
