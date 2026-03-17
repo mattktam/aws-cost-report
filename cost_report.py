@@ -70,6 +70,7 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
         month      = start_date.month - 1 or 12
         year       = start_date.year - (1 if start_date.month == 1 else 0)
         start_date = start_date.replace(year=year, month=month, day=1)
+    print(f"[monthly] today={today} month_start={month_start} start_date={start_date} end_date={end_date}")
     response = client.get_cost_and_usage(
         TimePeriod={"Start": str(start_date), "End": end_date},
         Granularity="DAILY",
@@ -89,6 +90,7 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
         month_buckets[key]["avg_total"] += day_total
         month_buckets[key]["days"]      += 1
 
+    print(f"[monthly] months found: {[k.strftime('%b %Y') for k in sorted(month_buckets.keys())]}")
     monthly_totals = {}
     for month_key, data in sorted(month_buckets.items()):
         month_label = month_key.strftime("%b %Y")
