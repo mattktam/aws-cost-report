@@ -94,9 +94,12 @@ def fetch_past_monthly_totals(client, compare_date, num_months=3):
         )
         key = day_dt.replace(day=1)
         if key not in month_buckets:
-            month_buckets[key] = {"total": 0.0, "days": 0}
-        month_buckets[key]["total"] += day_total
-        month_buckets[key]["days"]  += 1
+            month_buckets[key] = {"total": 0.0, "avg_total": 0.0, "days": 0}
+        month_buckets[key]["total"] += day_total        # always include
+        if day_dt.day == 1:
+            continue  # exclude 1st from avg calculation
+        month_buckets[key]["avg_total"] += day_total
+        month_buckets[key]["days"]      += 1
 
     monthly_totals = {}
     for month_key, data in sorted(month_buckets.items()):
@@ -294,9 +297,9 @@ def render_html_report(rows, base_date, compare_date, weekly_totals, monthly_tot
         max_val  = max(v["total"] for v in past_monthly_totals.values()) or 1
         bar_rows = ""
         for label, data in past_monthly_totals.items():
-            total    = data["total"]
-            days     = data["days"]
-            daily_avg = total / days if days else 0
+            total     = data["total"]
+            days      = data["days"]
+            daily_avg = data["avg_total"] / days if days else 0
             pct = (total / max_val * 100)
             bar_rows += f"""
 <tr>
